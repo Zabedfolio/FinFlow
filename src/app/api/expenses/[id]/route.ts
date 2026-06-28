@@ -6,7 +6,7 @@ const DB_NAME = 'Finflow';
 const COLLECTION_NAME = 'expenses';
 
 /**
- * PUT Handler: Updates an expense by ID in MongoDB Atlas.
+ * PUT Endpoint: Modifies an existing expense matching the URL ID parameter.
  */
 export async function PUT(
   request: Request,
@@ -15,15 +15,15 @@ export async function PUT(
   try {
     const { id } = await params;
     
-    // Ensure the ID is a valid 24-character hexadecimal MongoDB ObjectId
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'Invalid expense ID' }, { status: 400 });
+    // Check if the hex string is a valid 24-character MongoDB ID
+    if (ObjectId.isValid(id) === false) {
+      return NextResponse.json({ success: false, error: 'Invalid record ID format' }, { status: 400 });
     }
 
     const body = await request.json();
     const { title, amount, category, date } = body;
 
-    // Construct the fields we actually want to update (selective update)
+    // Build the set parameters selectively based on what the user changed in the input form
     const updateData: any = {};
 
     if (title !== undefined) {
@@ -42,38 +42,35 @@ export async function PUT(
     }
 
     if (category !== undefined) {
-      const validCategories = ['Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Others'];
-      if (!validCategories.includes(category)) {
+      const allowedCategories = ['Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Others'];
+      if (allowedCategories.includes(category) === false) {
         return NextResponse.json({ success: false, error: 'Invalid category selection' }, { status: 400 });
       }
       updateData.category = category;
     }
 
     if (date !== undefined) {
-      if (isNaN(Date.parse(date))) {
+      if (isNaN(Date.parse(date)) === true) {
         return NextResponse.json({ success: false, error: 'Invalid date selection' }, { status: 400 });
       }
       updateData.date = date;
     }
 
-    if (Object.keys(updateData).length === 0) {
-      return NextResponse.json({ success: false, error: 'No update data provided' }, { status: 400 });
-    }
-
     const client = await clientPromise;
     const db = client.db(DB_NAME);
 
-    // Update document in collection
+    // Apply the updates to the matching database document
     const result = await db.collection(COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(id) },
       { $set: updateData },
-      { returnDocument: 'after' } // Tells MongoDB to return the updated record
+      { returnDocument: 'after' } // Tells MongoDB to return the newly updated document
     );
 
     if (!result) {
-      return NextResponse.json({ success: false, error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Expense record not found' }, { status: 404 });
     }
 
+    // Return the updated fields back to the client UI
     return NextResponse.json({
       success: true,
       data: {
@@ -86,16 +83,16 @@ export async function PUT(
       },
     });
   } catch (error: any) {
-    console.error('Error updating expense:', error);
+    console.error('Error modifying database record:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update expense: ' + error.message },
+      { success: false, error: 'Failed to update record: ' + error.message },
       { status: 500 }
     );
   }
 }
 
 /**
- * DELETE Handler: Deletes an expense by ID from MongoDB Atlas.
+ * DELETE Endpoint: Removes a specific expense matching the URL ID parameter.
  */
 export async function DELETE(
   request: Request,
@@ -104,26 +101,27 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ success: false, error: 'Invalid expense ID' }, { status: 400 });
+    if (ObjectId.isValid(id) === false) {
+      return NextResponse.json({ success: false, error: 'Invalid record ID format' }, { status: 400 });
     }
 
     const client = await clientPromise;
     const db = client.db(DB_NAME);
 
+    // Execute deletion query matching ObjectId
     const result = await db.collection(COLLECTION_NAME).deleteOne({
       _id: new ObjectId(id),
     });
 
     if (result.deletedCount === 0) {
-      return NextResponse.json({ success: false, error: 'Expense not found' }, { status: 404 });
+      return NextResponse.json({ success: false, error: 'Expense record not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, message: 'Expense deleted successfully' });
+    return NextResponse.json({ success: true, message: 'Expense record deleted successfully' });
   } catch (error: any) {
-    console.error('Error deleting expense:', error);
+    console.error('Error deleting database record:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete expense: ' + error.message },
+      { success: false, error: 'Failed to delete record: ' + error.message },
       { status: 500 }
     );
   }

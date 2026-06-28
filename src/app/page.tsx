@@ -15,102 +15,141 @@ import {
   Play,
   Gear
 } from '@gravity-ui/icons';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Expense, ExpenseCategory } from '@/types/expense';
 
-// Define metadata for categories including Yandex Gravity UI Icons and color classes
-const CATEGORY_META: Record<ExpenseCategory, { icon: React.ComponentType<any>; colorClass: string; chartColor: string }> = {
-  Food: { icon: Cup, colorClass: 'bg-rose-500/10 text-rose-600 border-rose-200/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30', chartColor: '#f43f5e' },
-  Transport: { icon: Car, colorClass: 'bg-sky-500/10 text-sky-600 border-sky-200/50 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/30', chartColor: '#0ea5e9' },
-  Shopping: { icon: ShoppingCart, colorClass: 'bg-amber-500/10 text-amber-600 border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30', chartColor: '#f59e0b' },
-  Utilities: { icon: PlugConnection, colorClass: 'bg-emerald-500/10 text-emerald-600 border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30', chartColor: '#10b981' },
-  Entertainment: { icon: Play, colorClass: 'bg-violet-500/10 text-violet-600 border-violet-200/50 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/30', chartColor: '#8b5cf6' },
-  Others: { icon: Gear, colorClass: 'bg-zinc-500/10 text-zinc-600 border-zinc-200/50 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50', chartColor: '#71717a' }
-};
+// Simple helper function to get the icon component for each category
+function getCategoryIcon(category: ExpenseCategory) {
+  if (category === 'Food') return Cup;
+  if (category === 'Transport') return Car;
+  if (category === 'Shopping') return ShoppingCart;
+  if (category === 'Utilities') return PlugConnection;
+  if (category === 'Entertainment') return Play;
+  return Gear; // Default fallback icon for 'Others'
+}
+
+// Simple helper function to get the Tailwind styling color classes for badges
+function getCategoryColorClass(category: ExpenseCategory) {
+  if (category === 'Food') {
+    return 'bg-rose-500/10 text-rose-600 border-rose-200/50 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30';
+  }
+  if (category === 'Transport') {
+    return 'bg-sky-500/10 text-sky-600 border-sky-200/50 dark:bg-sky-950/20 dark:text-sky-400 dark:border-sky-900/30';
+  }
+  if (category === 'Shopping') {
+    return 'bg-amber-500/10 text-amber-600 border-amber-200/50 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30';
+  }
+  if (category === 'Utilities') {
+    return 'bg-emerald-500/10 text-emerald-600 border-emerald-200/50 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30';
+  }
+  if (category === 'Entertainment') {
+    return 'bg-violet-500/10 text-violet-600 border-violet-200/50 dark:bg-violet-950/20 dark:text-violet-400 dark:border-violet-900/30';
+  }
+  return 'bg-zinc-500/10 text-zinc-600 border-zinc-200/50 dark:bg-zinc-800/30 dark:text-zinc-400 dark:border-zinc-700/50';
+}
+
+// Simple helper function to get the Recharts fill color for the pie segments
+function getCategoryChartColor(category: ExpenseCategory) {
+  if (category === 'Food') return '#f43f5e';
+  if (category === 'Transport') return '#0ea5e9';
+  if (category === 'Shopping') return '#f59e0b';
+  if (category === 'Utilities') return '#10b981';
+  if (category === 'Entertainment') return '#8b5cf6';
+  return '#71717a';
+}
 
 export default function ExpenseTrackerDashboard() {
-  // --- STATE MANAGEMENT ---
+  // --- STATE VARIABLES ---
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Filtering & Sorting State
+  // Filtering & Sorting
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<'date-desc' | 'date-asc' | 'amount-desc' | 'amount-asc'>('date-desc');
+  const [sortBy, setSortBy] = useState<string>('date-desc');
   
-  // Modal State
+  // Modals visibility
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [modalMode, setModalMode] = useState<string>('add'); // 'add' or 'edit'
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   
-  // Form State
+  // Form Inputs
   const [formTitle, setFormTitle] = useState<string>('');
   const [formAmount, setFormAmount] = useState<string>('');
   const [formCategory, setFormCategory] = useState<ExpenseCategory>('Food');
-  const [formDate, setFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [formDate, setFormDate] = useState<string>('');
+  
+  // Feedback States
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
   
-  // Hydration state (prevents Recharts rendering mismatch before client setup)
+  // Hydration state (forces chart to wait for client browser to render, avoiding server errors)
   const [mounted, setMounted] = useState<boolean>(false);
 
-  // --- FETCHING DATA ---
+  // --- FETCHING DATA (Runs once on start) ---
   useEffect(() => {
     setMounted(true);
     fetchExpenses();
   }, []);
 
-  const fetchExpenses = async () => {
+  async function fetchExpenses() {
     try {
       setLoading(true);
       setError(null);
       const res = await fetch('/api/expenses');
       const json = await res.json();
       
-      if (json.success) {
+      if (json.success === true) {
         setExpenses(json.data);
       } else {
         setError(json.error || 'Failed to fetch expenses.');
       }
     } catch (err: any) {
-      console.error(err);
-      setError('Failed to fetch data from the server. Make sure MongoDB is connected.');
+      setError('Could not connect to server database. Ensure Atlas is running.');
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // --- FORM HANDLERS ---
-  const openAddModal = () => {
+  // --- MODAL CONTROLLERS ---
+  function openAddModal() {
     setModalMode('add');
     setEditingExpenseId(null);
     setFormTitle('');
     setFormAmount('');
     setFormCategory('Food');
-    setFormDate(new Date().toISOString().split('T')[0]);
+    
+    // Set form date to today's date in YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
+    setFormDate(today);
+    
     setFormError(null);
     setIsModalOpen(true);
-  };
+  }
 
-  const openEditModal = (expense: Expense) => {
+  function openEditModal(expense: Expense) {
     setModalMode('edit');
-    setEditingExpenseId(expense.id || expense._id || null);
+    // Save standard ID string from database document
+    const expenseId = expense.id || expense._id || null;
+    setEditingExpenseId(expenseId);
+    
     setFormTitle(expense.title);
     setFormAmount(expense.amount.toString());
     setFormCategory(expense.category);
     setFormDate(expense.date);
     setFormError(null);
     setIsModalOpen(true);
-  };
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // --- CRUD ACTIONS ---
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
 
-    // Dynamic UI Validations (Important for freshers to learn robust client side checks!)
-    if (!formTitle.trim()) {
-      setFormError('Please enter a description or title for the expense.');
+    // Simple Form Validation Checks
+    if (formTitle.trim() === '') {
+      setFormError('Please enter a description title.');
       return;
     }
     const parsedAmount = parseFloat(formAmount);
@@ -118,8 +157,8 @@ export default function ExpenseTrackerDashboard() {
       setFormError('Please enter a valid amount greater than zero.');
       return;
     }
-    if (!formDate) {
-      setFormError('Please pick a date.');
+    if (formDate === '') {
+      setFormError('Please select a date.');
       return;
     }
 
@@ -148,66 +187,106 @@ export default function ExpenseTrackerDashboard() {
       }
 
       const json = await res.json();
-      if (json.success) {
+      if (json.success === true) {
         setIsModalOpen(false);
-        fetchExpenses(); // Refresh the list
+        fetchExpenses(); // Reload list after add/edit success
       } else {
-        setFormError(json.error || 'Something went wrong. Please check inputs.');
+        setFormError(json.error || 'Failed to submit data.');
       }
     } catch (err: any) {
-      console.error(err);
-      setFormError('Failed to communicate with the server.');
+      setFormError('Failed to communicate with server api.');
     } finally {
       setSubmitting(false);
     }
-  };
+  }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this expense record?')) return;
+  async function handleDelete(id: string) {
+    const confirmDelete = confirm('Are you sure you want to delete this expense record?');
+    if (confirmDelete === false) return;
 
     try {
       const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
       const json = await res.json();
-      if (json.success) {
-        // Optimize UI state: remove it from current local list instantly
-        setExpenses(prev => prev.filter(exp => exp.id !== id && exp._id !== id));
+      if (json.success === true) {
+        // Instantly remove deleted item from local state list to avoid full page refresh delay
+        const updatedExpenses = expenses.filter(item => item.id !== id && item._id !== id);
+        setExpenses(updatedExpenses);
       } else {
         alert(json.error || 'Failed to delete record.');
       }
     } catch (err: any) {
-      console.error(err);
-      alert('Failed to delete expense record.');
+      alert('Connection error. Failed to delete.');
     }
-  };
+  }
 
-  // --- STATS COMPUTATIONS ---
-  // Calculates total expense by summing up amounts
-  const totalAmount = expenses.reduce((sum, item) => sum + item.amount, 0);
+  // --- STATS COMPUTATIONS (Easy loops for beginners instead of complex array.reduce helper) ---
+  let totalAmount = 0;
+  
+  let foodTotal = 0;
+  let transportTotal = 0;
+  let shoppingTotal = 0;
+  let utilitiesTotal = 0;
+  let entertainmentTotal = 0;
+  let othersTotal = 0;
 
-  // Calculates category summary for charts & badges
-  const categoryTotals = expenses.reduce((acc, item) => {
-    acc[item.category] = (acc[item.category] || 0) + item.amount;
-    return acc;
-  }, {} as Record<ExpenseCategory, number>);
-
-  // Finds top spending category dynamically
-  let topCategoryName: string = 'N/A';
-  let topCategoryVal = 0;
-  Object.entries(categoryTotals).forEach(([cat, val]) => {
-    if (val > topCategoryVal) {
-      topCategoryVal = val;
-      topCategoryName = cat;
+  // Simple forEach loop to sum up cost values and split them by category
+  expenses.forEach(item => {
+    totalAmount = totalAmount + item.amount;
+    
+    if (item.category === 'Food') {
+      foodTotal = foodTotal + item.amount;
+    } else if (item.category === 'Transport') {
+      transportTotal = transportTotal + item.amount;
+    } else if (item.category === 'Shopping') {
+      shoppingTotal = shoppingTotal + item.amount;
+    } else if (item.category === 'Utilities') {
+      utilitiesTotal = utilitiesTotal + item.amount;
+    } else if (item.category === 'Entertainment') {
+      entertainmentTotal = entertainmentTotal + item.amount;
+    } else {
+      othersTotal = othersTotal + item.amount;
     }
   });
 
-  // Prepare chart data format for Recharts
-  const chartData = Object.entries(categoryTotals).map(([name, value]) => ({
-    name,
-    value,
-    fill: CATEGORY_META[name as ExpenseCategory]?.chartColor || '#71717a'
-  }));
+  // Simple checks to see which category has the highest spending amount
+  let topCategoryName = 'N/A';
+  let topCategoryVal = 0;
 
-  // --- FILTER & SORT LOGIC ---
+  if (foodTotal > topCategoryVal) {
+    topCategoryVal = foodTotal;
+    topCategoryName = 'Food';
+  }
+  if (transportTotal > topCategoryVal) {
+    topCategoryVal = transportTotal;
+    topCategoryName = 'Transport';
+  }
+  if (shoppingTotal > topCategoryVal) {
+    topCategoryVal = shoppingTotal;
+    topCategoryName = 'Shopping';
+  }
+  if (utilitiesTotal > topCategoryVal) {
+    topCategoryVal = utilitiesTotal;
+    topCategoryName = 'Utilities';
+  }
+  if (entertainmentTotal > topCategoryVal) {
+    topCategoryVal = entertainmentTotal;
+    topCategoryName = 'Entertainment';
+  }
+  if (othersTotal > topCategoryVal) {
+    topCategoryVal = othersTotal;
+    topCategoryName = 'Others';
+  }
+
+  // Assemble chart data array from our variables for Recharts
+  const chartData = [];
+  if (foodTotal > 0) chartData.push({ name: 'Food', value: foodTotal, fill: '#f43f5e' });
+  if (transportTotal > 0) chartData.push({ name: 'Transport', value: transportTotal, fill: '#0ea5e9' });
+  if (shoppingTotal > 0) chartData.push({ name: 'Shopping', value: shoppingTotal, fill: '#f59e0b' });
+  if (utilitiesTotal > 0) chartData.push({ name: 'Utilities', value: utilitiesTotal, fill: '#10b981' });
+  if (entertainmentTotal > 0) chartData.push({ name: 'Entertainment', value: entertainmentTotal, fill: '#8b5cf6' });
+  if (othersTotal > 0) chartData.push({ name: 'Others', value: othersTotal, fill: '#71717a' });
+
+  // --- FILTER & SORT LOGIC (Simple filter & sort methods) ---
   const filteredExpenses = expenses
     .filter(item => {
       const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -215,21 +294,31 @@ export default function ExpenseTrackerDashboard() {
       return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
-      if (sortBy === 'date-desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (sortBy === 'date-asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
-      if (sortBy === 'amount-desc') return b.amount - a.amount;
-      if (sortBy === 'amount-asc') return a.amount - b.amount;
+      if (sortBy === 'date-desc') {
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      }
+      if (sortBy === 'date-asc') {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      }
+      if (sortBy === 'amount-desc') {
+        return b.amount - a.amount;
+      }
+      if (sortBy === 'amount-asc') {
+        return a.amount - b.amount;
+      }
       return 0;
     });
+
+  // Categories list array for rendering select options easily
+  const allCategories: ExpenseCategory[] = ['Food', 'Transport', 'Shopping', 'Utilities', 'Entertainment', 'Others'];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-indigo-500/30">
       
-      {/* HEADER SECTION */}
+      {/* HEADER BAR */}
       <header className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-md sticky top-0 z-10 px-6 py-4">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            {/* Elegant futuristic logo */}
             <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-extrabold text-lg">
               FF
             </div>
@@ -253,7 +342,7 @@ export default function ExpenseTrackerDashboard() {
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-8">
         
-        {/* STATS OVERVIEW CARDS */}
+        {/* TOP STATS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           
           {/* Card 1: Total Spending */}
@@ -295,15 +384,15 @@ export default function ExpenseTrackerDashboard() {
           </div>
         </div>
 
-        {/* MAIN LAYOUT GRID */}
+        {/* CONTENT LAYOUT CONTAINER */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           
-          {/* LEFT PANEL: VISUAL ANALYTICS */}
+          {/* ANALYTICS GRAPH (LEFT PANEL) */}
           <div className="lg:col-span-4 flex flex-col gap-6">
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 backdrop-blur-md shadow-xl">
               <h2 className="text-lg font-bold text-white mb-4">Spending Analytics</h2>
               
-              {/* Category distribution visual chart */}
+              {/* Donut chart component */}
               <div className="h-64 flex flex-col items-center justify-center">
                 {mounted && chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -339,16 +428,24 @@ export default function ExpenseTrackerDashboard() {
                 )}
               </div>
 
-              {/* Legend with direct totals */}
+              {/* Categorized totals list legend */}
               {chartData.length > 0 && (
                 <div className="mt-4 flex flex-col gap-2.5">
                   <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-800 pb-2 mb-1">
                     Breakdown by Category
                   </div>
-                  {Object.keys(CATEGORY_META).map((catName) => {
-                    const value = categoryTotals[catName as ExpenseCategory] || 0;
-                    const meta = CATEGORY_META[catName as ExpenseCategory];
-                    const IconComponent = meta.icon;
+                  {allCategories.map((catName) => {
+                    // Pull pre-calculated amount variables directly using checks
+                    let value = 0;
+                    if (catName === 'Food') value = foodTotal;
+                    else if (catName === 'Transport') value = transportTotal;
+                    else if (catName === 'Shopping') value = shoppingTotal;
+                    else if (catName === 'Utilities') value = utilitiesTotal;
+                    else if (catName === 'Entertainment') value = entertainmentTotal;
+                    else value = othersTotal;
+
+                    const IconComponent = getCategoryIcon(catName);
+                    const colorHex = getCategoryChartColor(catName);
                     const percentage = totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(0) : '0';
 
                     return (
@@ -356,9 +453,9 @@ export default function ExpenseTrackerDashboard() {
                         <div className="flex items-center gap-2 text-zinc-300">
                           <span 
                             className="h-2 w-2 rounded-full" 
-                            style={{ backgroundColor: meta.chartColor }} 
+                            style={{ backgroundColor: colorHex }} 
                           />
-                          <IconComponent className="h-4.5 w-4.5" />
+                          <IconComponent className="h-4.5 w-4.5 text-zinc-400" />
                           <span>{catName}</span>
                         </div>
                         <div className="flex items-center gap-2 font-medium">
@@ -373,13 +470,13 @@ export default function ExpenseTrackerDashboard() {
             </div>
           </div>
 
-          {/* RIGHT PANEL: TRANSACTION HISTORY */}
+          {/* LIST LOGS & FILTERS (RIGHT PANEL) */}
           <div className="lg:col-span-8 flex flex-col gap-6">
             
-            {/* CONTROLS (SEARCH, FILTER & SORT) */}
+            {/* CONTROLS (SEARCH & DROP-DOWN FILTERS) */}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-6 backdrop-blur-md shadow-xl flex flex-col md:flex-row gap-4 items-center justify-between">
               
-              {/* Search Bar */}
+              {/* Keyword Search Input */}
               <div className="relative w-full md:w-80">
                 <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-500">
                   <Magnifier className="h-4.5 w-4.5" />
@@ -393,9 +490,9 @@ export default function ExpenseTrackerDashboard() {
                 />
               </div>
 
-              {/* Filter and Sort Dropdowns */}
+              {/* Filters & Sorters */}
               <div className="flex w-full md:w-auto gap-4 items-center justify-end">
-                {/* Category Dropdown */}
+                {/* Category Select Dropdown */}
                 <div className="relative w-1/2 md:w-44">
                   <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-zinc-500">
                     <ChevronDown className="h-4 w-4" />
@@ -406,20 +503,20 @@ export default function ExpenseTrackerDashboard() {
                     className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950/80 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
                   >
                     <option value="All">All Categories</option>
-                    {Object.keys(CATEGORY_META).map(cat => (
+                    {allCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
                 </div>
 
-                {/* Sort Order Dropdown */}
+                {/* Sort Order Select Dropdown */}
                 <div className="relative w-1/2 md:w-44">
                   <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-zinc-500">
                     <ChevronDown className="h-4 w-4" />
                   </span>
                   <select
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
+                    onChange={(e) => setSortBy(e.target.value)}
                     className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-zinc-800 bg-zinc-950/80 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
                   >
                     <option value="date-desc">Newest Date</option>
@@ -431,10 +528,10 @@ export default function ExpenseTrackerDashboard() {
               </div>
             </div>
 
-            {/* EXPENSE LOGS */}
+            {/* TRANSACTION RECORDS CONTAINER */}
             <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 shadow-xl overflow-hidden">
               
-              {/* Desktop view: Table */}
+              {/* Desktop view: Classic Table */}
               <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full border-collapse text-left">
                   <thead>
@@ -469,8 +566,8 @@ export default function ExpenseTrackerDashboard() {
                       </tr>
                     ) : (
                       filteredExpenses.map((expense) => {
-                        const meta = CATEGORY_META[expense.category] || CATEGORY_META.Others;
-                        const CategoryIcon = meta.icon;
+                        const CategoryIcon = getCategoryIcon(expense.category);
+                        const badgeColors = getCategoryColorClass(expense.category);
                         return (
                           <tr key={expense.id || expense._id} className="hover:bg-zinc-900/40 group transition-all">
                             <td className="px-6 py-4">
@@ -479,7 +576,7 @@ export default function ExpenseTrackerDashboard() {
                               </span>
                             </td>
                             <td className="px-6 py-4">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${meta.colorClass}`}>
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${badgeColors}`}>
                                 <CategoryIcon className="h-3.5 w-3.5" />
                                 {expense.category}
                               </span>
@@ -489,7 +586,7 @@ export default function ExpenseTrackerDashboard() {
                                 year: 'numeric', 
                                 month: 'short', 
                                 day: 'numeric',
-                                timeZone: 'UTC' // Keep date formatting timezone independent
+                                timeZone: 'UTC' // Timezone independent display format
                               })}
                             </td>
                             <td className="px-6 py-4 text-right font-bold text-white text-base">
@@ -521,7 +618,7 @@ export default function ExpenseTrackerDashboard() {
                 </table>
               </div>
 
-              {/* Mobile view: Stacked list cards */}
+              {/* Mobile view: Stacked list layout */}
               <div className="sm:hidden block p-4 flex flex-col gap-4">
                 {loading ? (
                   [...Array(3)].map((_, i) => (
@@ -541,8 +638,8 @@ export default function ExpenseTrackerDashboard() {
                   </div>
                 ) : (
                   filteredExpenses.map((expense) => {
-                    const meta = CATEGORY_META[expense.category] || CATEGORY_META.Others;
-                    const CategoryIcon = meta.icon;
+                    const CategoryIcon = getCategoryIcon(expense.category);
+                    const badgeColors = getCategoryColorClass(expense.category);
                     return (
                       <div 
                         key={expense.id || expense._id} 
@@ -556,7 +653,7 @@ export default function ExpenseTrackerDashboard() {
                         </div>
                         
                         <div className="flex justify-between items-center text-xs">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold border ${meta.colorClass}`}>
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-semibold border ${badgeColors}`}>
                             <CategoryIcon className="h-3 w-3" />
                             {expense.category}
                           </span>
@@ -596,20 +693,15 @@ export default function ExpenseTrackerDashboard() {
         </div>
       </main>
 
-      {/* CRUD DIALOG / MODAL */}
+      {/* MODAL overlay (Form) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          
-          {/* Backdrop Blur overlay */}
           <div 
             onClick={() => setIsModalOpen(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
           />
           
-          {/* Modal Container */}
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200">
-            
-            {/* Close Button */}
             <button
               onClick={() => setIsModalOpen(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
@@ -617,12 +709,10 @@ export default function ExpenseTrackerDashboard() {
               <Xmark className="h-4.5 w-4.5" />
             </button>
 
-            {/* Modal Title */}
             <h3 className="text-lg font-bold text-white mb-6">
               {modalMode === 'add' ? 'Log New Expense' : 'Modify Expense Log'}
             </h3>
 
-            {/* Error Message banner */}
             {formError && (
               <div className="mb-5 p-3 rounded-lg border border-rose-500/25 bg-rose-500/10 text-rose-400 text-xs font-medium">
                 {formError}
@@ -630,21 +720,20 @@ export default function ExpenseTrackerDashboard() {
             )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              
-              {/* Field 1: Description/Title */}
+              {/* Field 1: Description */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Description</label>
                 <input
                   type="text"
-                  placeholder="e.g. Starbucks, Grocery shop"
+                  placeholder="e.g. Coffee shop, Office rent"
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-850 bg-zinc-950 text-sm text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
+                  className="w-full px-4 py-2.5 rounded-xl border border-zinc-855 bg-zinc-950 text-sm text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
                   required
                 />
               </div>
 
-              {/* Field 2: Amount (Number) */}
+              {/* Field 2: Cost Amount */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Amount ($)</label>
                 <input
@@ -671,7 +760,7 @@ export default function ExpenseTrackerDashboard() {
                     onChange={(e) => setFormCategory(e.target.value as ExpenseCategory)}
                     className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-zinc-850 bg-zinc-950 text-sm text-zinc-100 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 appearance-none transition-all cursor-pointer"
                   >
-                    {Object.keys(CATEGORY_META).map(cat => (
+                    {allCategories.map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
@@ -690,7 +779,7 @@ export default function ExpenseTrackerDashboard() {
                 />
               </div>
 
-              {/* Submit Buttons */}
+              {/* Modal Buttons */}
               <div className="mt-4 flex gap-3">
                 <button
                   type="button"
@@ -712,7 +801,7 @@ export default function ExpenseTrackerDashboard() {
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* FOOTER BAR */}
       <footer className="border-t border-zinc-900 bg-zinc-950 py-6 px-6 text-center text-xs text-zinc-500 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p>© {new Date().getFullYear()} FinFlow. Built with Next.js, MongoDB Atlas & Gravity UI Icons.</p>
