@@ -3,7 +3,7 @@ import clientPromise from '@/lib/mongodb';
 import { Expense } from '@/types/expense';
 
 // We specify database name and collection name clearly
-const DB_NAME = 'expense_tracker';
+const DB_NAME = 'Finflow';
 const COLLECTION_NAME = 'expenses';
 
 /**

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import clientPromise from '@/lib/mongodb';
 
-const DB_NAME = 'expense_tracker';
+const DB_NAME = 'Finflow';
 const COLLECTION_NAME = 'expenses';
 
 /**
