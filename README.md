@@ -100,3 +100,4 @@ Open your browser and navigate to [http://localhost:3000](http://localhost:3000)
 - **MongoDB Caching Singleton**: Check out `src/lib/mongodb.ts` to see how we prevent connection leaks during Next.js Hot Module Replacement (HMR) module reloads.
 - **REST CRUD APIs**: Examine `src/app/api/expenses/route.ts` and `src/app/api/expenses/[id]/route.ts` to see how Next.js App Router exposes API endpoints.
 - **Hydration Safe Components**: View `src/app/page.tsx`'s `mounted` state handler. It ensures client-only components like charts do not attempt to pre-render on the server.
+# FinFlow
