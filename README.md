@@ -2,6 +2,8 @@
 
 FinFlow is a high-fidelity, responsive, and modern personal expense tracker. It is built using **Next.js (App Router)**, **TypeScript**, **Tailwind CSS**, and **MongoDB Atlas** (using the native `mongodb` driver), decorated with Yandex's official **Gravity UI Icons**.
 
+🔗 **Live Link**: [https://fin-flow-six-phi.vercel.app/](https://fin-flow-six-phi.vercel.app/)
+
 This project is structured specifically to serve as a clean learning resource for junior web developers and freshers, avoiding complex or convoluted abstractions while maintaining industry-standard practices.
 
 ---
